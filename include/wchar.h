@@ -176,6 +176,10 @@ wctype_t  wctype(const char *);
 #define iswdigit(a) ((unsigned)(a)-'0' < 10)
 #endif
 
+#if defined(_GNU_SOURCE)
+wchar_t *wmempcpy(wchar_t *, const wchar_t *, size_t);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
