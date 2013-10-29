@@ -12,11 +12,6 @@
  * file. It also avoids any allocation to prevent memory-exhaustion
  * attacks via huge TCB shadow files. */
 
-static long xatol(const char *s)
-{
-	return isdigit(*s) ? atol(s) : -1;
-}
-
 static void cleanup(void *p)
 {
 	fclose(p);
@@ -29,7 +24,6 @@ int getspnam_r(const char *name, struct spwd *sp, char *buf, size_t size, struct
 	int rv = 0;
 	int fd;
 	size_t k, l = strlen(name);
-	char *s;
 	int skip = 0;
 	int cs;
 
@@ -71,34 +65,8 @@ int getspnam_r(const char *name, struct spwd *sp, char *buf, size_t size, struct
 			rv = ERANGE;
 			break;
 		}
-		buf[k-1] = 0;
 
-		s = buf;
-		sp->sp_namp = s;
-		if (!(s = strchr(s, ':'))) continue;
-
-		*s++ = 0; sp->sp_pwdp = s;
-		if (!(s = strchr(s, ':'))) continue;
-
-		*s++ = 0; sp->sp_lstchg = xatol(s);
-		if (!(s = strchr(s, ':'))) continue;
-
-		*s++ = 0; sp->sp_min = xatol(s);
-		if (!(s = strchr(s, ':'))) continue;
-
-		*s++ = 0; sp->sp_max = xatol(s);
-		if (!(s = strchr(s, ':'))) continue;
-
-		*s++ = 0; sp->sp_warn = xatol(s);
-		if (!(s = strchr(s, ':'))) continue;
-
-		*s++ = 0; sp->sp_inact = xatol(s);
-		if (!(s = strchr(s, ':'))) continue;
-
-		*s++ = 0; sp->sp_expire = xatol(s);
-		if (!(s = strchr(s, ':'))) continue;
-
-		*s++ = 0; sp->sp_flag = xatol(s);
+		if (__parsespent(buf, sp, 0, 0) < 0) continue;
 		*res = sp;
 		break;
 	}
