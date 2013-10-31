@@ -26,15 +26,14 @@ typedef struct ifaddrs_storage {
 } stor;
 #define next ifa.ifa_next
 
-static stor* list_add(stor** list, stor** head, char* ifname)
+static stor* list_add(stor** list, char* ifname)
 {
 	stor* curr = calloc(1, sizeof(stor));
 	if(curr) {
 		strcpy(curr->name, ifname);
 		curr->ifa.ifa_name = curr->name;
-		if(*head) (*head)->next = (struct ifaddrs*) curr;
-		*head = curr;
-		if(!*list) *list = curr;
+		curr->next = (struct ifaddrs *) *list;
+		*list = curr;
 	}
 	return curr;
 }
@@ -64,7 +63,7 @@ static void ipv6netmask(unsigned prefix_length, struct sockaddr_in6 *sa)
 	}
 }
 
-static void dealwithipv6(stor **list, stor** head)
+static void dealwithipv6(stor **list)
 {
 	FILE* f = fopen("/proc/net/if_inet6", "r");
 	/* 00000000000000000000000000000001 01 80 10 80 lo
@@ -93,7 +92,7 @@ static void dealwithipv6(stor **list, stor** head)
 			struct sockaddr_in6 sa = {0};
 			if(1 == inet_pton(AF_INET6, v6conv, &sa.sin6_addr)) {
 				sa.sin6_family = AF_INET6;
-				stor* curr = list_add(list, head, name);
+				stor* curr = list_add(list, name);
 				if(!curr) goto out;
 				curr->addr.v6 = sa;
 				curr->ifa.ifa_addr = (struct sockaddr*) &curr->addr;
@@ -119,7 +118,7 @@ int getifaddrs(struct ifaddrs **ifap)
 	if(!ii) return -1;
 	size_t i;
 	for(i = 0; ii[i].if_index || ii[i].if_name; i++) {
-		stor* curr = list_add(&list, &head, ii[i].if_name);
+		stor* curr = list_add(&list, ii[i].if_name);
 		if(!curr) {
 			if_freenameindex(ii);
 			goto err2;
@@ -165,10 +164,7 @@ int getifaddrs(struct ifaddrs **ifap)
 		}
 	}
 	close(sock);
-	void* last = 0;
-	for(head = list; head; head=(stor*)head->next) last=head;
-	head = last;
-	dealwithipv6(&list, &head);
+	dealwithipv6(&list);
 	*ifap = (struct ifaddrs*) list;
 	return 0;
 	err:
