@@ -11,6 +11,7 @@
 #include <arpa/inet.h> /* inet_pton */
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <dirent.h>
 
 typedef union {
 	struct sockaddr_in6 v6;
@@ -113,18 +114,25 @@ static void dealwithipv6(stor **list)
 
 int getifaddrs(struct ifaddrs **ifap)
 {
+	DIR * dir;
+	struct dirent * dirent;
 	stor *list = 0, *head = 0;
-	struct if_nameindex* ii = if_nameindex();
-	if(!ii) return -1;
+	struct ifreq req;
 	size_t i;
-	for(i = 0; ii[i].if_index || ii[i].if_name; i++) {
-		stor* curr = list_add(&list, ii[i].if_name);
-		if(!curr) {
-			if_freenameindex(ii);
-			goto err2;
+
+	dir = opendir("/sys/class/net");
+	if (!dir) return -1;
+	while ((dirent = readdir(dir))) {
+		if (!strcmp(dirent->d_name, ".") || !strcmp(dirent->d_name, ".."))
+			continue;
+		strncpy(req.ifr_name, dirent->d_name, sizeof req.ifr_name - 1);
+		req.ifr_name[sizeof req.ifr_name - 1] = '\0';
+		if (list_add(&list, req.ifr_name)) {
+			closedir(dir);
+			return -1;
 		}
 	}
-	if_freenameindex(ii);
+	closedir(dir);
 
 	int sock = socket(PF_INET, SOCK_DGRAM|SOCK_CLOEXEC, IPPROTO_IP);
 	if(sock == -1) goto err2;
@@ -141,7 +149,6 @@ int getifaddrs(struct ifaddrs **ifap)
 				break;
 			}
 		}
-		struct ifreq req;
 		snprintf(req.ifr_name, sizeof req.ifr_name, "%s", head->name);
 		if(-1 == ioctl(sock, SIOCGIFFLAGS, &req)) goto err;
 
