@@ -4,6 +4,8 @@
 #include <ifaddrs.h>
 #include <stdlib.h>
 #include <net/if.h> /* IFNAMSIZ, ifreq, ifconf */
+#include <net/ethernet.h>
+#include <netpacket/packet.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
@@ -16,6 +18,7 @@
 typedef union {
 	struct sockaddr_in6 v6;
 	struct sockaddr_in v4;
+	struct sockaddr_ll ll;
 } soa;
 
 typedef struct ifaddrs_storage {
@@ -116,67 +119,84 @@ int getifaddrs(struct ifaddrs **ifap)
 {
 	DIR * dir;
 	struct dirent * dirent;
-	stor *list = 0, *head = 0;
+	stor *list = 0, *head = 0, *addr = 0;
+	int sock = socket(PF_INET, SOCK_DGRAM|SOCK_CLOEXEC, IPPROTO_IP);
 	struct ifreq req;
 	size_t i;
 
+	if (sock == -1) goto err0;
+
 	dir = opendir("/sys/class/net");
-	if (!dir) return -1;
+	if (!dir) goto err1;
 	while ((dirent = readdir(dir))) {
 		if (!strcmp(dirent->d_name, ".") || !strcmp(dirent->d_name, ".."))
 			continue;
 		strncpy(req.ifr_name, dirent->d_name, sizeof req.ifr_name - 1);
 		req.ifr_name[sizeof req.ifr_name - 1] = '\0';
-		if (list_add(&list, req.ifr_name)) {
-			closedir(dir);
-			return -1;
+		head = list_add(&list, req.ifr_name);
+		if (!head) goto err2;
+		head->addr.ll.sll_family = AF_PACKET;
+		if (ioctl(sock, SIOCGIFINDEX, &req)) goto err2;
+		head->addr.ll.sll_ifindex = req.ifr_ifindex;
+		if (ioctl(sock, SIOCGIFHWADDR, &req)) goto err2;
+		head->addr.ll.sll_hatype = req.ifr_hwaddr.sa_family;
+		switch (req.ifr_hwaddr.sa_family)
+		{
+			case ARPHRD_ETHER:
+				head->addr.ll.sll_halen = ETHER_ADDR_LEN;
+				break;
+			default:
+				head->addr.ll.sll_halen = 0;
 		}
+		head->ifa.ifa_addr = (struct sockaddr *) &head->addr;
+		memcpy(head->addr.ll.sll_addr, req.ifr_hwaddr.sa_data, head->addr.ll.sll_halen);
 	}
 	closedir(dir);
 
-	int sock = socket(PF_INET, SOCK_DGRAM|SOCK_CLOEXEC, IPPROTO_IP);
-	if(sock == -1) goto err2;
 	struct ifreq reqs[32]; /* arbitrary chosen boundary */
 	struct ifconf conf = {.ifc_len = sizeof reqs, .ifc_req = reqs};
-	if(-1 == ioctl(sock, SIOCGIFCONF, &conf)) goto err;
+	if (ioctl(sock, SIOCGIFCONF, &conf)) goto err1;
 	size_t reqitems = conf.ifc_len / sizeof(struct ifreq);
-	for(head = list; head; head = (stor*)head->next) {
+	for (head = list; head; head = (stor*)head->next) {
 		for(i = 0; i < reqitems; i++) {
 			// get SIOCGIFADDR of active interfaces.
-			if(!strcmp(reqs[i].ifr_name, head->name)) {
-				head->addr.v4 = *(struct sockaddr_in*)&reqs[i].ifr_addr;
-				head->ifa.ifa_addr = (struct sockaddr*) &head->addr;
-				break;
-			}
+			if(!strcmp(reqs[i].ifr_name, head->name)) break;
 		}
-		strcpy(req.ifr_name, head->name);
-		if(-1 == ioctl(sock, SIOCGIFFLAGS, &req)) goto err;
+		if (i == reqitems) continue;
 
-		head->ifa.ifa_flags = req.ifr_flags;
-		if(head->ifa.ifa_addr) {
+		addr = list_add(&list, reqs[i].ifr_name);
+		if (!addr) goto err1;
+		addr->addr.v4 = *(struct sockaddr_in *) &reqs[i].ifr_addr;
+		addr->ifa.ifa_addr = (struct sockaddr *) &addr->addr;
+		strcpy(req.ifr_name, addr->name);
+		if (ioctl(sock, SIOCGIFFLAGS, &req)) goto err1;
+		addr->ifa.ifa_flags = req.ifr_flags;
+		if (addr->ifa.ifa_addr) {
 			/* or'ing flags with IFF_LOWER_UP on active interfaces to mimic glibc */
-			head->ifa.ifa_flags |= IFF_LOWER_UP; 
-			if(-1 == ioctl(sock, SIOCGIFNETMASK, &req)) goto err;
-			head->netmask.v4 = *(struct sockaddr_in*)&req.ifr_netmask;
-			head->ifa.ifa_netmask = (struct sockaddr*) &head->netmask;
+			addr->ifa.ifa_flags |= IFF_LOWER_UP;
+			if (ioctl(sock, SIOCGIFNETMASK, &req)) goto err1;
+			addr->netmask.v4 = *(struct sockaddr_in*)&req.ifr_netmask;
+			addr->ifa.ifa_netmask = (struct sockaddr*) &addr->netmask;
 	
-			if(head->ifa.ifa_flags & IFF_POINTOPOINT) {
-				if(-1 == ioctl(sock, SIOCGIFDSTADDR, &req)) goto err;
-				head->dst.v4 = *(struct sockaddr_in*)&req.ifr_dstaddr;
+			if (addr->ifa.ifa_flags & IFF_POINTOPOINT) {
+				if (ioctl(sock, SIOCGIFDSTADDR, &req)) goto err1;
+				addr->dst.v4 = *(struct sockaddr_in*)&req.ifr_dstaddr;
 			} else {
-				if(-1 == ioctl(sock, SIOCGIFBRDADDR, &req)) goto err;
-				head->dst.v4 = *(struct sockaddr_in*)&req.ifr_broadaddr;
+				if (ioctl(sock, SIOCGIFBRDADDR, &req)) goto err1;
+				addr->dst.v4 = *(struct sockaddr_in*)&req.ifr_broadaddr;
 			}
-			head->ifa.ifa_ifu.ifu_dstaddr = (struct sockaddr*) &head->dst;
+			addr->ifa.ifa_ifu.ifu_dstaddr = (struct sockaddr*) &addr->dst;
 		}
 	}
 	close(sock);
 	dealwithipv6(&list);
 	*ifap = (struct ifaddrs*) list;
 	return 0;
-	err:
-	close(sock);
 	err2:
+	closedir(dir);
+	err1:
+	close(sock);
+	err0:
 	freeifaddrs((struct ifaddrs*) list);
 	return -1;
 }
