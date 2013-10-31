@@ -149,7 +149,7 @@ int getifaddrs(struct ifaddrs **ifap)
 				break;
 			}
 		}
-		snprintf(req.ifr_name, sizeof req.ifr_name, "%s", head->name);
+		strcpy(req.ifr_name, head->name);
 		if(-1 == ioctl(sock, SIOCGIFFLAGS, &req)) goto err;
 
 		head->ifa.ifa_flags = req.ifr_flags;
