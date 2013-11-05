@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <getopt.h>
 #include <stdio.h>
+#include <string.h>
 
 extern int __optpos, __optreset;
 
@@ -16,16 +17,21 @@ static int __getopt_long(int argc, char *const *argv, const char *optstring, con
 	if ((longonly && argv[optind][1]) ||
 		(argv[optind][1] == '-' && argv[optind][2]))
 	{
-		int i;
+		int i, j;
 		for (i=0; longopts[i].name; i++) {
 			const char *name = longopts[i].name;
-			char *opt = argv[optind]+1;
+			char *opt = argv[optind]+1, *c;
 			if (*opt == '-') opt++;
-			for (; *name && *name == *opt; name++, opt++);
-			if (*name || (*opt && *opt != '=')) continue;
-			if (*opt == '=') {
+			for (c = opt; *name && *name == *c; name++, c++);
+			if (*c && *c != '=') continue;
+			if (*name) {
+				if (name == longopts[i].name) continue;
+				for (j=i+1; longopts[j].name && strncmp(opt, longopts[j].name, c - opt); j++);
+				if (longopts[j].name) continue;
+			}
+			if (*c == '=') {
 				if (!longopts[i].has_arg) continue;
-				optarg = opt+1;
+				optarg = c+1;
 			} else {
 				if (longopts[i].has_arg == required_argument) {
 					if (!(optarg = argv[++optind]))
