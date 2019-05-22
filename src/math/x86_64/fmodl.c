@@ -1,3 +1,5 @@
+#ifndef __LONG_DOUBLE_64__
+
 long double fmodl(long double x, long double y)
 {
 	unsigned short sw;
@@ -10,3 +12,9 @@ long double fmodl(long double x, long double y)
 	} while (sw & 0x0400);
 	return x;
 }
+
+#else
+
+#include "../fmodl.c"
+
+#endif

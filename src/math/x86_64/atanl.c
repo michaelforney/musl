@@ -1,3 +1,5 @@
+#ifndef __LONG_DOUBLE_64__
+
 long double atanl(long double x)
 {
 	__asm__ (
@@ -6,3 +8,9 @@ long double atanl(long double x)
 	);
 	return x;
 }
+
+#else
+
+#include "../atanl.c"
+
+#endif

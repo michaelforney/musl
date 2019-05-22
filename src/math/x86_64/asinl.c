@@ -1,3 +1,5 @@
+#ifndef __LONG_DOUBLE_64__
+
 long double asinl(long double x)
 {
 	__asm__ (
@@ -11,3 +13,9 @@ long double asinl(long double x)
 	);
 	return x;
 }
+
+#else
+
+#include "../asinl.c"
+
+#endif

@@ -1,3 +1,5 @@
+#ifndef __LONG_DOUBLE_64__
+
 long double logl(long double x)
 {
 	long double ln2;
@@ -5,3 +7,9 @@ long double logl(long double x)
 	__asm__ ("fyl2x" : "=t"(x) : "0"(x), "u"(ln2) : "st(1)");
 	return x;
 }
+
+#else
+
+#include "../logl.c"
+
+#endif

@@ -1,3 +1,5 @@
+#ifndef __LONG_DOUBLE_64__
+
 __asm__(
 	".global floorl\n"
 	".type floorl,@function\n"
@@ -27,3 +29,9 @@ __asm__(
 	"	mov $0xf,%al\n"
 	"	jmp 1b\n"
 );
+
+#else
+
+#include "../floorl.c"
+
+#endif

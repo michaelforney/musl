@@ -1,3 +1,5 @@
+#ifndef __LONG_DOUBLE_64__
+
 __asm__ (
 	".global expm1l\n"
 	".type expm1l,@function\n"
@@ -83,3 +85,9 @@ __asm__ (
 	"	add $16,%rsp\n"
 	"	ret\n"
 );
+
+#else
+
+#include "../exp2l.c"
+
+#endif

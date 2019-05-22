@@ -1,3 +1,5 @@
+#ifndef __LONG_DOUBLE_64__
+
 /* see ../i386/acos.s */
 
 long double acosl(long double x)
@@ -15,3 +17,9 @@ long double acosl(long double x)
 	);
 	return x;
 }
+
+#else
+
+#include "../acosl.c"
+
+#endif

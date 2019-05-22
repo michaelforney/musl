@@ -1,3 +1,5 @@
+#ifndef __LONG_DOUBLE_64__
+
 __asm__ (
 	".global log1pl\n"
 	".type log1pl,@function\n"
@@ -15,3 +17,9 @@ __asm__ (
 	"	fyl2x\n"
 	"	ret\n"
 );
+
+#else
+
+#include "../log1pl.c"
+
+#endif

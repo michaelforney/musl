@@ -663,6 +663,10 @@ SUBARCH=${SUBARCH}-fdpic
 fi
 fi
 
+if test "$ARCH" = "x86_64" ; then
+trycppif "__LONG_DOUBLE_64__" "$t" && SUBARCH=${SUBARCH}-ld64
+fi
+
 test "$SUBARCH" \
 && printf "configured for %s variant: %s\n" "$ARCH" "$ARCH$SUBARCH"
 
